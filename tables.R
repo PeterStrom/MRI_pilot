@@ -244,6 +244,11 @@ t3 <- function(data, numerator, denominator){
       num7p <- sum(x$Gleason_standard >= 7)
       num6 <- sum(x$Gleason_standard == 6)
     }
+    if (numerator == "tb") { #tsb=target, systematic and biomarker
+      num <- sum(x$S3M > 0.1 & x$done_target == 1)
+      num7p <- sum(x$S3M > 0.1 & x$Gleason_target >= 7, na.rm = T)
+      num6 <- sum(x$S3M > 0.1 & x$Gleason_target == 6, na.rm = T)
+    }
     if (numerator == "tsb") { #tsb=target, systematic and biomarker
       num <- sum(x$S3M > 0.1)
       num7p <- sum(x$S3M > 0.1 & x$Gleason_max >= 7, na.rm = T)
@@ -283,6 +288,7 @@ t3 <- function(data, numerator, denominator){
 
 fun_boot <- function() {
   ## Bootstrap 95CI
+  r0 <- matrix(NA, nrow = n, ncol = 5)
   r1 <- matrix(NA, nrow = n, ncol = 5)
   r2 <- matrix(NA, nrow = n, ncol = 5)
   r3 <- matrix(NA, nrow = n, ncol = 5)
@@ -297,6 +303,7 @@ fun_boot <- function() {
   for (i in 1:n){
     d <- sample(1:size, size = size, replace = TRUE)
     d <- data[d, ]
+    r0[i, ] <- t3(data = d, numerator = "tb", denominator = "ts")
     r1[i, ] <- t3(data = d, numerator = "target", denominator = "current")
     r2[i, ] <- t3(data = d, numerator = "biomarker", denominator = "current")
     r3[i, ] <- t3(data = d, numerator = "combined", denominator = "current")
@@ -307,7 +314,7 @@ fun_boot <- function() {
     r8[i, ] <- t3(data = d, numerator = "target", denominator = "target")
     r9[i, ] <- t3(data = d, numerator = "biomarker", denominator = "biomarker")
   }
-  return(list(r1 = r1, r2 = r2, r3 = r3, r4 = r4, r5 = r5, r6 = r6, r7 = r7, r8 = r8, r9 = r9))
+  return(list(r1 = r1, r2 = r2, r3 = r3, r4 = r4, r5 = r5, r6 = r6, r7 = r7, r8 = r8, r9 = r9, r0 = r0))
 }
 
 t3_to_str <- function(r, point){
@@ -334,122 +341,40 @@ t3_to_str <- function(r, point){
 }
 
 ## Generate table
-tar_cur <- t3(data = data, numerator = "target", denominator = "current")
-bio_cur <- t3(data = data, numerator = "biomarker", denominator = "current")
-com_cur <- t3(data = data, numerator = "combined", denominator = "current")
-tsb_cur <- t3(data = data, numerator = "tsb", denominator = "current")
-tar_ts <- t3(data = data, numerator = "target", denominator = "ts")
-cur_ts <- t3(data = data, numerator = "current", denominator = "ts")
-tsb_ts <- t3(data = data, numerator = "tsb", denominator = "ts")
-com_tar <- t3(data = data, numerator = "target", denominator = "target")
-com_bio <- t3(data = data, numerator = "biomarker", denominator = "biomarker")
+gen_t3 <- function(data){
+  tb_ts <- t3(data = data, numerator = "tb", denominator = "ts")
+  tar_cur <- t3(data = data, numerator = "target", denominator = "current")
+  bio_cur <- t3(data = data, numerator = "biomarker", denominator = "current")
+  com_cur <- t3(data = data, numerator = "combined", denominator = "current")
+  tsb_cur <- t3(data = data, numerator = "tsb", denominator = "current")
+  tar_ts <- t3(data = data, numerator = "target", denominator = "ts")
+  cur_ts <- t3(data = data, numerator = "current", denominator = "ts")
+  tsb_ts <- t3(data = data, numerator = "tsb", denominator = "ts")
+  com_tar <- t3(data = data, numerator = "target", denominator = "target")
+  com_bio <- t3(data = data, numerator = "biomarker", denominator = "biomarker")
+  
+  r <- fun_boot()
+  
+  tab3 <- rbind(c("", "", "", ""),
+                t3_to_str(r = r[[1]], point = tar_cur),
+                t3_to_str(r = r[[2]], point = bio_cur),
+                t3_to_str(r = r[[3]], point = com_cur),
+                t3_to_str(r = r[[4]], point = tsb_cur),
+                t3_to_str(r = r[[5]], point = tar_ts),
+                t3_to_str(r = r[[6]], point = cur_ts),
+                t3_to_str(r = r[[7]], point = tsb_ts),
+                t3_to_str(r = r[[8]], point = com_tar),
+                t3_to_str(r = r[[9]], point = com_bio),
+                t3_to_str(r = r[[10]], point = tb_ts))
+  tab3 <- as.data.frame(tab3)
+  names(tab3) <- c("n", "perc", "GS7p", "GS6")
+  return(tab3)
+}
 
-r <- fun_boot()
-
-tab3 <- rbind(c("", "", "", ""),
-              t3_to_str(r = r[[1]], point = tar_cur),
-              t3_to_str(r = r[[2]], point = bio_cur),
-              t3_to_str(r = r[[3]], point = com_cur),
-              t3_to_str(r = r[[4]], point = tsb_cur),
-              t3_to_str(r = r[[5]], point = tar_ts),
-              t3_to_str(r = r[[6]], point = cur_ts),
-              t3_to_str(r = r[[7]], point = tsb_ts),
-              t3_to_str(r = r[[8]], point = com_tar),
-              t3_to_str(r = r[[9]], point = com_bio))
-tab3 <- as.data.frame(tab3)
-names(tab3) <- c("n", "perc", "GS7p", "GS6")
-t3_all <- tab3
-
-## Generate tables by site
-data_backup <- data
-
-## Stockholm
-data <- filter(data, Site == "Stockholm")
-tar_cur <- t3(data = data, numerator = "target", denominator = "current")
-bio_cur <- t3(data = data, numerator = "biomarker", denominator = "current")
-com_cur <- t3(data = data, numerator = "combined", denominator = "current")
-tsb_cur <- t3(data = data, numerator = "tsb", denominator = "current")
-tar_ts <- t3(data = data, numerator = "target", denominator = "ts")
-cur_ts <- t3(data = data, numerator = "current", denominator = "ts")
-tsb_ts <- t3(data = data, numerator = "tsb", denominator = "ts")
-com_tar <- t3(data = data, numerator = "target", denominator = "target")
-com_bio <- t3(data = data, numerator = "biomarker", denominator = "biomarker")
-
-r <- fun_boot()
-
-tab3 <- rbind(c("", "", "", ""),
-              t3_to_str(r = r[[1]], point = tar_cur),
-              t3_to_str(r = r[[2]], point = bio_cur),
-              t3_to_str(r = r[[3]], point = com_cur),
-              t3_to_str(r = r[[4]], point = tsb_cur),
-              t3_to_str(r = r[[5]], point = tar_ts),
-              t3_to_str(r = r[[6]], point = cur_ts),
-              t3_to_str(r = r[[7]], point = tsb_ts),
-              t3_to_str(r = r[[8]], point = com_tar),
-              t3_to_str(r = r[[9]], point = com_bio))
-tab3 <- as.data.frame(tab3)
-names(tab3) <- c("n", "perc", "GS7p", "GS6")
-t3_sto <- tab3
-
-## Oslo
-data <- data_backup
-data <- filter(data, Site == "Oslo")
-tar_cur <- t3(data = data, numerator = "target", denominator = "current")
-bio_cur <- t3(data = data, numerator = "biomarker", denominator = "current")
-com_cur <- t3(data = data, numerator = "combined", denominator = "current")
-tsb_cur <- t3(data = data, numerator = "tsb", denominator = "current")
-tar_ts <- t3(data = data, numerator = "target", denominator = "ts")
-cur_ts <- t3(data = data, numerator = "current", denominator = "ts")
-tsb_ts <- t3(data = data, numerator = "tsb", denominator = "ts")
-com_tar <- t3(data = data, numerator = "target", denominator = "target")
-com_bio <- t3(data = data, numerator = "biomarker", denominator = "biomarker")
-
-r <- fun_boot()
-
-tab3 <- rbind(c("", "", "", ""),
-              t3_to_str(r = r[[1]], point = tar_cur),
-              t3_to_str(r = r[[2]], point = bio_cur),
-              t3_to_str(r = r[[3]], point = com_cur),
-              t3_to_str(r = r[[4]], point = tsb_cur),
-              t3_to_str(r = r[[5]], point = tar_ts),
-              t3_to_str(r = r[[6]], point = cur_ts),
-              t3_to_str(r = r[[7]], point = tsb_ts),
-              t3_to_str(r = r[[8]], point = com_tar),
-              t3_to_str(r = r[[9]], point = com_bio))
-tab3 <- as.data.frame(tab3)
-names(tab3) <- c("n", "perc", "GS7p", "GS6")
-t3_osl <- tab3
-
-## Tonsberg
-data <- data_backup
-data <- filter(data, Site == "Tonsberg")
-tar_cur <- t3(data = data, numerator = "target", denominator = "current")
-bio_cur <- t3(data = data, numerator = "biomarker", denominator = "current")
-com_cur <- t3(data = data, numerator = "combined", denominator = "current")
-tsb_cur <- t3(data = data, numerator = "tsb", denominator = "current")
-tar_ts <- t3(data = data, numerator = "target", denominator = "ts")
-cur_ts <- t3(data = data, numerator = "current", denominator = "ts")
-tsb_ts <- t3(data = data, numerator = "tsb", denominator = "ts")
-com_tar <- t3(data = data, numerator = "target", denominator = "target")
-com_bio <- t3(data = data, numerator = "biomarker", denominator = "biomarker")
-
-r <- fun_boot()
-
-tab3 <- rbind(c("", "", "", ""),
-              t3_to_str(r = r[[1]], point = tar_cur),
-              t3_to_str(r = r[[2]], point = bio_cur),
-              t3_to_str(r = r[[3]], point = com_cur),
-              t3_to_str(r = r[[4]], point = tsb_cur),
-              t3_to_str(r = r[[5]], point = tar_ts),
-              t3_to_str(r = r[[6]], point = cur_ts),
-              t3_to_str(r = r[[7]], point = tsb_ts),
-              t3_to_str(r = r[[8]], point = com_tar),
-              t3_to_str(r = r[[9]], point = com_bio))
-tab3 <- as.data.frame(tab3)
-names(tab3) <- c("n", "perc", "GS7p", "GS6")
-t3_ton <- tab3
-
-data <- data_backup
+t3_all <- gen_t3(data = data)
+t3_sto <- gen_t3(data = filter(data, Site == "Stockholm"))
+t3_osl <- gen_t3(data = filter(data, Site == "Oslo"))
+t3_ton <- gen_t3(data = filter(data, Site == "Tonsberg"))
 
 ##############################################################################
 ## Output the table (then copypaste the whole block into the formated version. 
